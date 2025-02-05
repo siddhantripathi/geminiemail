@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Parser</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-firestore.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+            <h1 class="text-2xl font-bold mb-6 text-gray-800">Email Parser</h1>
+            
+            <div class="mb-4">
+                <textarea 
+                    id="emailInput" 
+                    class="w-full h-48 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Paste your email here..."></textarea>
+            </div>
+
+            <button 
+                id="submitButton"
+                class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+                Parse Email
+            </button>
+
+            <div id="loadingIndicator" class="hidden mt-4 text-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+            </div>
+
+            <div id="resultContainer" class="hidden mt-6">
+                <h2 class="text-lg font-semibold mb-3 text-gray-700">Parsed Result:</h2>
+                <pre id="jsonResult" class="bg-gray-50 p-4 rounded-lg overflow-x-auto"></pre>
+            </div>
+
+            <div id="errorContainer" class="hidden mt-4 p-4 bg-red-100 text-red-700 rounded-lg">
+            </div>
+
+            <div class="mt-8">
+                <h2 class="text-xl font-semibold mb-4">Recent Parses</h2>
+                <div id="historyContainer" class="bg-white rounded-lg shadow-md">
+                    <!-- History items will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/js/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+openai
+motor
+pydantic
+pydantic-settings
+python-dotenv
+flask
+google-generativeai
+python-dotenv # For local environment variables.
+spacy
+dateutil
