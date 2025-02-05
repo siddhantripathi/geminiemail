@@ -3,3 +3,4 @@
    *.pyc
    .vercel
    .env*.local
+.vercel

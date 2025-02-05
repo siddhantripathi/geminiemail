@@ -22,10 +22,55 @@ text.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # Database connection function
 def get_db_connection():
-    return psycopg2.connect(
-        os.environ.get('POSTGRES_URL'),
-        sslmode='require'
-    )
+    try:
+        conn = psycopg2.connect(
+            os.environ.get('POSTGRES_URL'),
+            sslmode='require'
+        )
+        return conn
+    except Exception as e:
+        print(f"Database connection error: {str(e)}")
+        raise
+
+# Initialize database tables
+def init_db():
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS parsed_emails (
+                        id SERIAL PRIMARY KEY,
+                        input_text TEXT NOT NULL,
+                        reply_type VARCHAR(50),
+                        proposed_time TIMESTAMP,
+                        meeting_link TEXT,
+                        delegate_to VARCHAR(255),
+                        additional_notes TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                conn.commit()
+    except Exception as e:
+        print(f"Database initialization error: {str(e)}")
+        raise
+
+# Initialize DB on startup
+init_db()
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    try:
+        # Test database connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT 1')
+        return jsonify({'status': 'healthy', 'database': 'connected'})
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'error': str(e)
+        }), 500
 
 @app.route('/api/parse', methods=['POST'])
 def parse_email():
@@ -47,11 +92,11 @@ def parse_email():
                     RETURNING id, created_at
                 """, (
                     email_text,
-                    parsed_data['reply_type'],
-                    parsed_data['proposed_time'],
-                    parsed_data['meeting_link'],
-                    parsed_data['delegate_to'],
-                    parsed_data['additional_notes']
+                    parsed_data.get('reply_type'),
+                    parsed_data.get('proposed_time'),
+                    parsed_data.get('meeting_link'),
+                    parsed_data.get('delegate_to'),
+                    parsed_data.get('additional_notes')
                 ))
                 result = cur.fetchone()
                 conn.commit()
@@ -63,7 +108,7 @@ def parse_email():
         return jsonify(parsed_data)
 
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error in parse_email: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/history', methods=['GET'])
@@ -80,18 +125,20 @@ def get_history():
                 
                 # Convert datetime objects to ISO format strings
                 for row in history:
-                    row['created_at'] = row['created_at'].isoformat()
+                    if row['created_at']:
+                        row['created_at'] = row['created_at'].isoformat()
                     if row['proposed_time']:
                         row['proposed_time'] = row['proposed_time'].isoformat()
                 
                 return jsonify(history)
 
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error in get_history: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=int(os.environ.get("PORT", 5000))) # 
+    app.run(debug=True)
+
 nlp = spacy.load("en_core_web_sm")  # Load spaCy model once at module level
 
 def classify_reply_gemini(email_text):
