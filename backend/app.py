@@ -1,6 +1,5 @@
 import os
 from flask import Flask, request, jsonify
-import json
 from dotenv import load_dotenv
 import google.generativeai as genai
 from flask_cors import CORS
@@ -10,12 +9,43 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Configure Gemini
+# Configure Gemini with safety settings
 api_key = os.getenv('GEMINI_API_KEY')
 if not api_key:
     raise ValueError("GEMINI_API_KEY not found in environment variables")
+
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-pro')
+generation_config = {
+    "temperature": 0.1,  # Lower temperature for more consistent output
+    "top_p": 0.8,
+    "top_k": 40,
+    "max_output_tokens": 1024,
+}
+
+safety_settings = [
+    {
+        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+        "threshold": "BLOCK_NONE"
+    },
+    {
+        "category": "HARM_CATEGORY_HATE_SPEECH",
+        "threshold": "BLOCK_NONE"
+    },
+    {
+        "category": "HARM_CATEGORY_HARASSMENT",
+        "threshold": "BLOCK_NONE"
+    },
+    {
+        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        "threshold": "BLOCK_NONE"
+    }
+]
+
+model = genai.GenerativeModel(
+    model_name='gemini-pro',
+    generation_config=generation_config,
+    safety_settings=safety_settings
+)
 
 @app.route('/')
 def home():
@@ -23,7 +53,7 @@ def home():
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({"status": "healthy", "gemini": "configured" if api_key else "not configured"})
+    return jsonify({"status": "healthy"})
 
 @app.route('/api/parse', methods=['POST'])
 def parse_email():
@@ -37,46 +67,37 @@ def parse_email():
         if not email_text:
             return jsonify({"error": "No email text provided"}), 400
 
-        # Modified prompt to be more explicit about JSON formatting
-        prompt = """You are a JSON generator. Your task is to analyze this email and return ONLY a JSON object with no additional text or formatting.
+        prompt = """You are a helpful email analyzer. Your task is to extract information from the email below and return it in JSON format.
+        
+Email to analyze: "{}"
 
-        Analyze this email:
-        \"\"\"
-        {}
-        \"\"\"
+Return only a JSON object with these fields:
+- reply_type: one of ["acceptance", "reschedule", "decline", "info_request", "delegation"]
+- proposed_time: ISO 8601 datetime or null
+- meeting_link: URL or null
+- delegate_to: email address or null
+- additional_notes: string or null
 
-        Return a JSON object in this exact format:
-        {{
-            "reply_type": "acceptance" | "reschedule" | "decline" | "info_request" | "delegation",
-            "proposed_time": "ISO 8601 datetime or null",
-            "meeting_link": "URL or null",
-            "delegate_to": "email address or null",
-            "additional_notes": "string or null"
-        }}""".format(email_text)
+Example response:
+{{"reply_type": "acceptance", "proposed_time": "2024-03-20T14:00:00Z", "meeting_link": null, "delegate_to": null, "additional_notes": "Will bring presentation materials"}}""".format(email_text)
 
         try:
-            # Debug: Print the prompt
-            print("Sending prompt to Gemini:", prompt)
-            
             response = model.generate_content(prompt)
             
-            # Debug: Print raw response
-            print("Raw Gemini response:", repr(response.text))
+            if not response.candidates or not response.candidates[0].content:
+                return jsonify({"error": "No valid response generated"}), 500
             
-            # Clean the response text
-            response_text = response.text.strip()
-            
-            # Debug: Print cleaned response
-            print("Cleaned response text:", repr(response_text))
+            response_text = response.candidates[0].content.parts[0].text.strip()
+            print("Raw response:", response_text)  # Debug log
             
             if not response_text:
-                return jsonify({"error": "Empty response from Gemini"}), 500
+                return jsonify({"error": "Empty response received"}), 500
 
             try:
+                import json
                 parsed_json = json.loads(response_text)
-                # Debug: Print parsed JSON
-                print("Successfully parsed JSON:", parsed_json)
                 
+                # Validate required fields
                 required_keys = ["reply_type", "proposed_time", "meeting_link", "delegate_to", "additional_notes"]
                 normalized_data = {key: None for key in required_keys}
                 
@@ -88,12 +109,8 @@ def parse_email():
                 
             except json.JSONDecodeError as e:
                 print(f"JSON parsing error: {str(e)}")
-                print(f"Response text causing error: {repr(response_text)}")
-                return jsonify({
-                    "error": "Invalid JSON response", 
-                    "details": str(e),
-                    "raw_response": response_text
-                }), 500
+                print(f"Response text: {response_text}")
+                return jsonify({"error": f"Invalid JSON in response: {str(e)}"}), 500
             
         except Exception as e:
             print(f"Gemini API error: {str(e)}")
