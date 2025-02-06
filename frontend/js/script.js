@@ -21,26 +21,32 @@ document.addEventListener('DOMContentLoaded', () => {
         clearResults();
 
         try {
+            console.log('Sending request...'); // Debug log
             const response = await fetch('/api/parse', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({ email: emailText })
             });
 
+            console.log('Response status:', response.status); // Debug log
+            
+            const data = await response.json();
+            console.log('Response data:', data); // Debug log
+
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                throw new Error(data.error || `HTTP error! status: ${response.status}`);
             }
 
-            const data = await response.json();
             if (data.error) {
                 throw new Error(data.error);
             }
 
             showResult(data);
         } catch (error) {
-            showError(error.message);
+            showError(`Error: ${error.message}`);
             console.error('Parse error:', error);
         } finally {
             toggleLoading(false);
