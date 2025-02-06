@@ -4,10 +4,12 @@ from datetime import datetime
 import json
 from dotenv import load_dotenv
 import google.generativeai as genai
+from flask_cors import CORS
 
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Configure Gemini
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
@@ -53,6 +55,9 @@ def parse_email_reply(email_text):
 @app.route('/api/parse', methods=['POST'])
 def parse_email():
     try:
+        if not request.is_json:
+            return jsonify({'error': 'Content-Type must be application/json'}), 400
+            
         email_text = request.json.get('email')
         if not email_text:
             return jsonify({'error': 'No email text provided'}), 400
@@ -63,7 +68,12 @@ def parse_email():
 
     except Exception as e:
         print(f"Error in parse_email: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+        return jsonify({'error': str(e)}), 500
+
+# Add a health check endpoint
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    return jsonify({'status': 'healthy'})
 
 if __name__ == '__main__':
     app.run(debug=True)
