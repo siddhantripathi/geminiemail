@@ -7,18 +7,18 @@ import os  # For environment variables
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 import os
 from flask import Flask, request, jsonify
-from google.generativeai import text # Import Gemini Library
 
 load_dotenv()
 
 app = Flask(__name__)
 
-# Set your Gemini API key as an environment variable (CRUCIAL!)
-os.environ["GOOGLE_API_KEY"] = os.environ.get("GEMINI_API_KEY") # Get API Key from env variable.
-text.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Configure Gemini
+genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+model = genai.GenerativeModel('gemini-pro')
 
 # Database connection function
 def get_db_connection():
@@ -72,6 +72,44 @@ def health_check():
             'error': str(e)
         }), 500
 
+def parse_email_reply(email_text):
+    """Single Gemini API call to handle all NLP tasks"""
+    prompt = f"""
+    Analyze this email reply and extract the following information in JSON format.
+    Return ONLY the JSON object, no other text.
+    
+    Required JSON format:
+    {{
+        "reply_type": "acceptance" | "reschedule" | "decline" | "info_request" | "delegation",
+        "proposed_time": "ISO 8601 datetime or null",
+        "meeting_link": "URL or null",
+        "delegate_to": "email address or null",
+        "additional_notes": "string or null"
+    }}
+
+    Email text:
+    {email_text}
+    """
+
+    try:
+        response = model.generate_content(prompt)
+        parsed_json = json.loads(response.text)
+        
+        # Validate and normalize the response
+        required_keys = ["reply_type", "proposed_time", "meeting_link", "delegate_to", "additional_notes"]
+        normalized_data = {key: None for key in required_keys}
+        
+        for key, value in parsed_json.items():
+            if key in normalized_data:
+                # Convert empty strings to None
+                normalized_data[key] = value if value and value != "" else None
+        
+        return normalized_data
+
+    except Exception as e:
+        print(f"Error parsing email: {str(e)}")
+        return {key: None for key in required_keys}
+
 @app.route('/api/parse', methods=['POST'])
 def parse_email():
     try:
@@ -79,7 +117,7 @@ def parse_email():
         if not email_text:
             return jsonify({'error': 'No email text provided'}), 400
 
-        # Parse email using your existing function
+        # Single API call to Gemini for parsing
         parsed_data = parse_email_reply(email_text)
         
         # Store in database
