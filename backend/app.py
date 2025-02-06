@@ -4,8 +4,7 @@ from datetime import datetime
 from dateutil import parser
 import spacy
 import os  # For environment variables
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import pg8000.native
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -23,9 +22,15 @@ model = genai.GenerativeModel('gemini-pro')
 # Database connection function
 def get_db_connection():
     try:
-        conn = psycopg2.connect(
-            os.environ.get('POSTGRES_URL'),
-            sslmode='require'
+        # Parse connection string
+        conn_str = os.environ.get('POSTGRES_URL')
+        # pg8000 connection
+        conn = pg8000.native.Connection(
+            user='your_user',
+            password='your_password',
+            host='your_host',
+            port=5432,
+            database='your_database'
         )
         return conn
     except Exception as e:
@@ -117,33 +122,36 @@ def parse_email():
         if not email_text:
             return jsonify({'error': 'No email text provided'}), 400
 
-        # Single API call to Gemini for parsing
         parsed_data = parse_email_reply(email_text)
         
-        # Store in database
-        with get_db_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    INSERT INTO parsed_emails 
-                    (input_text, reply_type, proposed_time, meeting_link, delegate_to, additional_notes)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    RETURNING id, created_at
-                """, (
+        # Store in database using pg8000
+        conn = get_db_connection()
+        try:
+            result = conn.run(
+                """
+                INSERT INTO parsed_emails 
+                (input_text, reply_type, proposed_time, meeting_link, delegate_to, additional_notes)
+                VALUES (:1, :2, :3, :4, :5, :6)
+                RETURNING id, created_at
+                """,
+                (
                     email_text,
                     parsed_data.get('reply_type'),
                     parsed_data.get('proposed_time'),
                     parsed_data.get('meeting_link'),
                     parsed_data.get('delegate_to'),
                     parsed_data.get('additional_notes')
-                ))
-                result = cur.fetchone()
-                conn.commit()
-
-        # Add database ID to response
-        parsed_data['id'] = result['id']
-        parsed_data['created_at'] = result['created_at'].isoformat()
-        
-        return jsonify(parsed_data)
+                )
+            )
+            conn.commit()
+            
+            # Add database ID to response
+            parsed_data['id'] = result[0][0]
+            parsed_data['created_at'] = result[0][1].isoformat()
+            
+            return jsonify(parsed_data)
+        finally:
+            conn.close()
 
     except Exception as e:
         print(f"Error in parse_email: {str(e)}")
