@@ -29,30 +29,37 @@ model = genai.GenerativeModel(
 )
 
 def analyze_email(email_text):
-    prompt = f"""Analyze this email and extract key information. Return ONLY a JSON object.
+    prompt = f"""Analyze this email carefully and extract information. Return ONLY a JSON object.
 
 Input email:
 {email_text}
 
-Instructions:
-1. Determine if this is an acceptance, reschedule request, decline, information request, or delegation
-2. Extract any mentioned dates, times, or scheduling information
-3. Look for any meeting links (URLs)
-4. Check if the email delegates to another person
-5. Note any additional important information
+Rules for extraction:
+1. reply_type:
+   - "acceptance" if confirming attendance
+   - "reschedule" if suggesting new time
+   - "decline" if refusing
+   - "delegation" if forwarding to someone else
+   - "info_request" for questions or information sharing
+2. proposed_time: 
+   - Extract ANY mentioned date/time (e.g., "Tuesday at 2 PM", "tomorrow afternoon", "next week")
+   - Convert to ISO format (e.g., "2024-03-21T14:00:00Z")
+   - If multiple times mentioned, use the most definitive one
+3. meeting_link:
+   - Look for URLs containing: zoom, meet, teams, webex, or any meeting links
+4. delegate_to:
+   - Extract email addresses or names of people being delegated to
+5. additional_notes:
+   - Include key information like agenda items, action items, or important context
 
-Return a JSON object in this EXACT format:
+Return EXACT format:
 {{
     "reply_type": "acceptance" | "reschedule" | "decline" | "info_request" | "delegation",
-    "proposed_time": "<ISO 8601 datetime if present, null if not>",
-    "meeting_link": "<URL if present, null if not>",
-    "delegate_to": "<email address if delegated, null if not>",
-    "additional_notes": "<any other important information, null if none>"
-}}
-
-Example valid responses:
-{{"reply_type": "acceptance", "proposed_time": "2024-03-21T15:00:00Z", "meeting_link": null, "delegate_to": null, "additional_notes": "Will bring presentation materials"}}
-{{"reply_type": "reschedule", "proposed_time": null, "meeting_link": null, "delegate_to": null, "additional_notes": "Cannot make it this week"}}"""
+    "proposed_time": "<ISO datetime or null>",
+    "meeting_link": "<URL or null>",
+    "delegate_to": "<email/name or null>",
+    "additional_notes": "<important details or null>"
+}}"""
 
     try:
         response = model.generate_content(prompt)
