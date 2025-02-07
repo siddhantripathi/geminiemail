@@ -43,8 +43,7 @@ Rules for extraction:
    - "info_request" for questions or information sharing
 2. proposed_time: 
    - Extract ANY mentioned date/time (e.g., "Tuesday at 2 PM", "tomorrow afternoon", "next week")
-   - Convert to ISO format (e.g., "2024-03-21T14:00:00Z")
-   - If multiple times mentioned, use the most definitive one
+   - If multiple times mentioned, use the most definitive one, list them in alternative times and write the most appropriate in the scheduled time
 3. meeting_link:
    - Look for URLs containing: zoom, meet, teams, webex, or any meeting links
 4. delegate_to:
@@ -58,7 +57,8 @@ Return EXACT format:
     "proposed_time": "<ISO datetime or null>",
     "meeting_link": "<URL or null>",
     "delegate_to": "<email/name or null>",
-    "additional_notes": "<important details or null>"
+    "additional_notes": "<important details or null>",
+    "additional_times": "<alternative times or null>"
 }}"""
 
     try:
